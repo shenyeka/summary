@@ -96,193 +96,163 @@ elif menu == "MERGE DATA":
     """, unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
-        "Upload File Summary",
+        "Upload 5 File PNL",
         type=["xlsx"],
         accept_multiple_files=True
     )
 
     if uploaded_files:
 
-        # =====================================
-        # SCAN KOLOM SEMUA FILE
-        # =====================================
+        st.markdown("### 📅 Pilih Bulan")
 
-        all_columns = set()
-        file_data = {}
-
-        for file in uploaded_files:
-
-            df = pd.read_excel(file)
-
-            file_data[file.name] = df
-
-            all_columns.update(df.columns.tolist())
-
-        all_columns = sorted(
-            [str(col) for col in all_columns]
+        selected_months = st.multiselect(
+            "",
+            [
+                "Jan-26",
+                "Feb-26",
+                "Mar-26",
+                "Apr-26",
+                "May-26",
+                "Jun-26",
+                "Jul-26",
+                "Aug-26",
+                "Sep-26",
+                "Oct-26",
+                "Nov-26",
+                "Dec-26",
+                "YTD"
+            ],
+            default=[
+                "Jan-26",
+                "Feb-26",
+                "Mar-26",
+                "Apr-26"
+            ]
         )
 
-        st.markdown("## ⚙️ PILIH KOLOM")
+        st.markdown("### 📊 Pilih Metric")
 
-        selected_columns = st.multiselect(
-            "Pilih kolom yang ingin diambil",
-            options=all_columns
+        selected_metrics = st.multiselect(
+            "",
+            [
+                "REVENUE",
+                "EBIT",
+                "EBIT %"
+            ],
+            default=[
+                "REVENUE",
+                "EBIT",
+                "EBIT %"
+            ]
         )
-
-        st.markdown("## ➕ KOLOM TAMBAHAN")
-
-        add_entity = st.checkbox(
-            "Tambahkan ENTITY",
-            value=True
-        )
-
-        add_service = st.checkbox(
-            "Tambahkan SERVICE",
-            value=True
-        )
-
-        add_afiliasi = st.checkbox(
-            "PNL Afiliasi",
-            value=True
-        )
-
-        add_vertical = st.checkbox(
-            "Vertical 2",
-            value=True
-        )
-
-        add_existing = st.checkbox(
-            "Existing/ Whitesheet",
-            value=True
-        )
-
-        # =====================================
-        # GENERATE
-        # =====================================
 
         if st.button("🚀 GENERATE SUMMARY"):
 
-            final_df = pd.DataFrame()
+            final_data = []
 
-            for filename, df in file_data.items():
-
-                temp = pd.DataFrame()
-
-                # ==========================
-                # ENTITY
-                # ==========================
+            for file in uploaded_files:
 
                 entity = (
-                    filename
+                    file.name
                     .split(" ")[0]
                     .upper()
                 )
 
-                if add_entity:
-
-                    temp["ENTITY"] = entity
-
-                # ==========================
-                # KOLOM PILIHAN USER
-                # ==========================
-
-                for col in selected_columns:
-
-                    if col in df.columns:
-
-                        temp[col] = df[col]
-
-                # ==========================
-                # SERVICE
-                # ==========================
-
-                if add_service:
-
-                    service_col = None
-
-                    for col in df.columns:
-
-                        if (
-                            "SERVICE"
-                            in str(col).upper()
-                        ):
-
-                            service_col = col
-                            break
-
-                    if service_col:
-
-                        temp["SERVICE"] = (
-                            df[service_col]
-                        )
-
-                    else:
-
-                        temp["SERVICE"] = ""
-
-                # ==========================
-                # KOLOM KOSONG
-                # ==========================
-
-                if add_afiliasi:
-
-                    temp["PNL Afiliasi"] = ""
-
-                if add_vertical:
-
-                    temp["Vertical 2"] = ""
-
-                if add_existing:
-
-                    temp[
-                        "Existing/ Whitesheet"
-                    ] = ""
-
-                final_df = pd.concat(
-                    [
-                        final_df,
-                        temp
-                    ],
-                    ignore_index=True
+                raw = pd.read_excel(
+                    file,
+                    header=None
                 )
 
-            # =====================================
-            # SUMMARY
-            # =====================================
+                service_header = raw.iloc[4]
+                month_header = raw.iloc[5]
+                metric_header = raw.iloc[6]
 
-            st.markdown("## 📊 SUMMARY")
+                for row_idx in range(7, len(raw)):
+
+                    row = raw.iloc[row_idx]
+
+                    service = str(row[2]).strip()
+                    customer = str(row[3]).strip()
+
+                    if (
+                        customer == ""
+                        or customer.upper() == "NAN"
+                        or "TOTAL" in customer.upper()
+                    ):
+                        continue
+
+                    result = {
+
+                        "ENTITY": entity,
+                        "SERVICE": service,
+                        "CUSTOMER": customer,
+                        "PNL Afiliasi": "",
+                        "Vertical 2": "",
+                        "Existing/ Whitesheet": ""
+
+                    }
+
+                    for col in range(4, len(raw.columns)):
+
+                        month = str(
+                            month_header[col]
+                        ).strip()
+
+                        metric = str(
+                            metric_header[col]
+                        ).upper().strip()
+
+                        if (
+                            month
+                            not in selected_months
+                        ):
+                            continue
+
+                        if (
+                            metric
+                            not in selected_metrics
+                        ):
+                            continue
+
+                        new_col = (
+                            f"{metric}_{month}"
+                        )
+
+                        result[new_col] = row[col]
+
+                    final_data.append(
+                        result
+                    )
+
+            df_final = pd.DataFrame(
+                final_data
+            )
+
+            st.markdown(
+                "## 📊 SUMMARY RESULT"
+            )
 
             c1, c2, c3 = st.columns(3)
 
             c1.metric(
-                "Total File",
-                len(uploaded_files)
+                "Total Entity",
+                df_final["ENTITY"].nunique()
             )
 
             c2.metric(
-                "Total Row",
-                len(final_df)
+                "Total Customer",
+                len(df_final)
             )
 
             c3.metric(
                 "Total Column",
-                len(final_df.columns)
+                len(df_final.columns)
             )
-
-            # =====================================
-            # PREVIEW
-            # =====================================
-
-            st.markdown("## 📋 PREVIEW")
 
             st.dataframe(
-                final_df,
+                df_final,
                 use_container_width=True
             )
-
-            # =====================================
-            # DOWNLOAD
-            # =====================================
 
             output = io.BytesIO()
 
@@ -291,20 +261,14 @@ elif menu == "MERGE DATA":
                 engine="openpyxl"
             ) as writer:
 
-                final_df.to_excel(
+                df_final.to_excel(
                     writer,
                     index=False
                 )
 
             st.download_button(
-                label="⬇️ Download Summary",
-                data=output.getvalue(),
-                file_name="SUMMARY_ALL_PNL.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                "⬇️ Download Summary",
+                output.getvalue(),
+                "SUMMARY_ALL_PNL.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-    else:
-
-        st.info(
-            "Silakan upload file terlebih dahulu."
-        )

@@ -96,74 +96,240 @@ elif menu == "MERGE DATA":
     """, unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
-        "Upload File Excel",
+        "Upload File Summary",
         type=["xlsx"],
         accept_multiple_files=True
     )
 
     if uploaded_files:
 
-        merged_df = pd.DataFrame()
+        try:
 
-        for file in uploaded_files:
+            all_data = []
 
-            df = pd.read_excel(file)
+            for file in uploaded_files:
 
-            df["SOURCE FILE"] = file.name
+                entity = (
+                    file.name
+                    .split(" ")[0]
+                    .upper()
+                )
 
-            merged_df = pd.concat(
-                [merged_df, df],
-                ignore_index=True
+                raw = pd.read_excel(
+                    file,
+                    header=None
+                )
+
+                header_row = 6
+                data_start = 7
+
+                headers = raw.iloc[header_row]
+
+                # =====================
+                # Cari kolom utama
+                # =====================
+
+                service_col = None
+                customer_col = None
+
+                for col in range(len(headers)):
+
+                    value = str(
+                        headers[col]
+                    ).upper()
+
+                    if "SERVICE" in value:
+
+                        service_col = col
+
+                    if "CUSTOMER" in value:
+
+                        customer_col = col
+
+                if customer_col is None:
+                    continue
+
+                # =====================
+                # Build Data
+                # =====================
+
+                for idx in range(
+                    data_start,
+                    len(raw)
+                ):
+
+                    row = raw.iloc[idx]
+
+                    customer = row[
+                        customer_col
+                    ]
+
+                    if pd.isna(customer):
+                        continue
+
+                    result = {
+
+                        "ENTITY": entity,
+
+                        "SERVICE":
+                        row[service_col]
+                        if service_col is not None
+                        else "",
+
+                        "CUSTOMER":
+                        customer,
+
+                        "PNL Afiliasi": "",
+
+                        "Vertical 2": "",
+
+                        "Existing/ Whitesheet": ""
+
+                    }
+
+                    # =====================
+                    # Ambil semua metric
+                    # =====================
+
+                    for col in range(
+                        len(raw.columns)
+                    ):
+
+                        metric = str(
+                            headers[col]
+                        ).upper()
+
+                        value = row[col]
+
+                        if (
+                            metric
+                            not in
+                            [
+                                "REVENUE",
+                                "EBIT",
+                                "EBIT %"
+                            ]
+                        ):
+                            continue
+
+                        month = raw.iloc[5, col]
+
+                        if pd.isna(month):
+                            continue
+
+                        # =====================
+                        # Nama bulan
+                        # =====================
+
+                        if (
+                            str(month)
+                            .upper()
+                            .strip()
+                            == "YTD"
+                        ):
+
+                            month_name = "YTD"
+
+                        else:
+
+                            try:
+
+                                month_name = pd.to_datetime(
+                                    month
+                                ).strftime(
+                                    "%b-%y"
+                                ).upper()
+
+                            except:
+
+                                month_name = (
+                                    str(month)
+                                    .upper()
+                                )
+
+                        col_name = (
+                            f"{metric}_{month_name}"
+                        )
+
+                        result[
+                            col_name
+                        ] = value
+
+                    all_data.append(
+                        result
+                    )
+
+            # =====================
+            # MERGE
+            # =====================
+
+            df_final = pd.DataFrame(
+                all_data
             )
 
-        # ================= SUMMARY =================
-
-        total_file = len(uploaded_files)
-        total_row = len(merged_df)
-        total_col = len(merged_df.columns)
-        total_duplicate = merged_df.duplicated().sum()
-
-        st.markdown("## 📊 SUMMARY")
-
-        c1,c2,c3,c4 = st.columns(4)
-
-        c1.metric("Total File", total_file)
-        c2.metric("Total Row", f"{total_row:,}")
-        c3.metric("Total Column", total_col)
-        c4.metric("Duplicate", total_duplicate)
-
-        # ================= PREVIEW =================
-
-        st.markdown("## 📋 PREVIEW DATA")
-
-        st.dataframe(
-            merged_df,
-            use_container_width=True
-        )
-
-        # ================= DOWNLOAD =================
-
-        output = io.BytesIO()
-
-        with pd.ExcelWriter(
-            output,
-            engine="openpyxl"
-        ) as writer:
-
-            merged_df.to_excel(
-                writer,
-                index=False
+            st.markdown(
+                "## 📊 SUMMARY"
             )
 
-        st.download_button(
-            "⬇️ Download Merge Result",
-            data=output.getvalue(),
-            file_name="merged_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+            c1, c2, c3 = st.columns(3)
+
+            c1.metric(
+                "Total Entity",
+                df_final[
+                    "ENTITY"
+                ].nunique()
+            )
+
+            c2.metric(
+                "Total Customer",
+                len(df_final)
+            )
+
+            c3.metric(
+                "Total Column",
+                len(df_final.columns)
+            )
+
+            st.markdown(
+                "## 📋 PREVIEW"
+            )
+
+            st.dataframe(
+                df_final,
+                use_container_width=True
+            )
+
+            # =====================
+            # DOWNLOAD
+            # =====================
+
+            output = io.BytesIO()
+
+            with pd.ExcelWriter(
+                output,
+                engine="openpyxl"
+            ) as writer:
+
+                df_final.to_excel(
+                    writer,
+                    index=False
+                )
+
+            st.download_button(
+                label="⬇️ Download Summary",
+                data=output.getvalue(),
+                file_name="SUMMARY_ALL_PNL.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Error : {e}"
+            )
 
     else:
 
         st.info(
-            "Silakan upload file terlebih dahulu."
+            "Upload file PUJA, PSR, PFU, PIR, dan MLD terlebih dahulu."
         )

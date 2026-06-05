@@ -91,248 +91,147 @@ elif menu == "MERGE DATA":
 
     st.markdown("""
     <div class='header-container'>
-        MERGE DATA SUMMARY
+        MERGE DATA
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded_files = st.file_uploader(
-        "Upload File PNL",
-        type=["xlsx"],
-        accept_multiple_files=True
+    uploaded_file = st.file_uploader(
+        "Upload File Excel",
+        type=["xlsx"]
     )
 
-    if uploaded_files:
+    if uploaded_file:
 
-        # =====================================
-        # SCAN HEADER FILE PERTAMA
-        # =====================================
+        # ======================================
+        # BACA FILE
+        # ======================================
 
-        raw_first = pd.read_excel(
-            uploaded_files[0],
+        df = pd.read_excel(
+            uploaded_file,
             header=None
         )
 
-        month_row = raw_first.iloc[5]
-        metric_row = raw_first.iloc[6]
+        st.markdown("## 📋 PREVIEW DATA")
 
-        available_columns = {}
-
-        for col in range(len(raw_first.columns)):
-
-            metric = str(
-                metric_row[col]
-            ).strip()
-
-            month = str(
-                month_row[col]
-            ).strip()
-
-            if metric.upper() in [
-                "REVENUE",
-                "EBIT",
-                "EBIT %"
-            ]:
-
-                col_name = f"{metric} {month}"
-
-                available_columns[col_name] = col
-
-        st.markdown(
-            "## 📊 Pilih Kolom"
+        st.dataframe(
+            df,
+            use_container_width=True,
+            height=400
         )
 
-        selected_columns = st.multiselect(
-            "Kolom yang akan diambil",
-            list(
-                available_columns.keys()
-            )
+        # ======================================
+        # PILIH KOLOM
+        # ======================================
+
+        st.markdown("## ⚙️ Mapping Kolom")
+
+        col_options = list(df.columns)
+
+        service_col = st.selectbox(
+            "SERVICE",
+            col_options
         )
 
-        if st.button(
-            "🚀 GENERATE SUMMARY"
-        ):
+        customer_col = st.selectbox(
+            "CUSTOMER",
+            col_options,
+            index=min(4, len(col_options)-1)
+        )
 
-            final_data = []
+        rev_jan_col = st.selectbox(
+            "Revenue Jan",
+            col_options
+        )
 
-            # =====================================
-            # LOOP SEMUA FILE
-            # =====================================
+        ebit_jan_col = st.selectbox(
+            "EBIT Jan",
+            col_options
+        )
 
-            for file in uploaded_files:
+        rev_feb_col = st.selectbox(
+            "Revenue Feb",
+            col_options
+        )
 
-                entity = (
-                    file.name
-                    .split(" ")[0]
-                    .upper()
+        ebit_feb_col = st.selectbox(
+            "EBIT Feb",
+            col_options
+        )
+
+        # ======================================
+        # BARIS DATA
+        # ======================================
+
+        start_row = st.number_input(
+            "Data mulai dari baris",
+            min_value=1,
+            value=8
+        )
+
+        # ======================================
+        # GENERATE
+        # ======================================
+
+        if st.button("🚀 GENERATE TEMPLATE"):
+
+            temp = df.iloc[start_row-1:].copy()
+
+            result = pd.DataFrame()
+
+            result["ENTITY"] = ""
+
+            result["SERVICE"] = temp[
+                service_col
+            ]
+
+            result["CUSTOMER"] = temp[
+                customer_col
+            ]
+
+            result["PNL Afiliasi"] = ""
+
+            result["Vertical 2"] = ""
+
+            result["Existing/Whitesheet"] = ""
+
+            result["Revenue Jan"] = temp[
+                rev_jan_col
+            ]
+
+            result["EBIT Jan"] = temp[
+                ebit_jan_col
+            ]
+
+            result["Revenue Feb"] = temp[
+                rev_feb_col
+            ]
+
+            result["EBIT Feb"] = temp[
+                ebit_feb_col
+            ]
+
+            # ==================================
+            # HAPUS TOTAL
+            # ==================================
+
+            result = result[
+                ~result["CUSTOMER"]
+                .astype(str)
+                .str.upper()
+                .str.contains(
+                    "TOTAL",
+                    na=False
                 )
-
-                raw = pd.read_excel(
-                    file,
-                    header=None
-                )
-
-                # service merged cell
-                raw[0] = raw[0].ffill()
-
-                month_row = raw.iloc[5]
-                metric_row = raw.iloc[6]
-
-                file_mapping = {}
-
-                # =====================================
-                # MAPPING KOLOM
-                # =====================================
-
-                for col in range(
-                    len(raw.columns)
-                ):
-
-                    metric = str(
-                        metric_row[col]
-                    ).strip()
-
-                    month = str(
-                        month_row[col]
-                    ).strip()
-
-                    if metric.upper() in [
-                        "REVENUE",
-                        "EBIT",
-                        "EBIT %"
-                    ]:
-
-                        file_mapping[
-                            f"{metric} {month}"
-                        ] = col
-
-                # =====================================
-                # LOOP CUSTOMER
-                # =====================================
-
-                for r in range(
-                    7,
-                    len(raw)
-                ):
-
-                    service = str(
-                        raw.iloc[r,0]
-                    ).strip()
-
-                    customer = str(
-                        raw.iloc[r,4]
-                    ).strip()
-
-                    row_text = (
-                        service + " " + customer
-                    ).upper()
-
-                    # skip kosong
-                    if (
-                        customer == ""
-                        or customer.upper()
-                        == "NAN"
-                    ):
-                        continue
-
-                    # skip total
-                    if (
-                        "TOTAL"
-                        in row_text
-                    ):
-                        continue
-
-                    row_result = {
-
-                        "ENTITY":
-                        entity,
-
-                        "SERVICE":
-                        service,
-
-                        "CUSTOMER":
-                        customer,
-
-                        "PNL Afiliasi":
-                        "",
-
-                        "Vertical 2":
-                        "",
-
-                        "Existing/Whitesheet":
-                        ""
-
-                    }
-
-                    # =====================================
-                    # AMBIL KOLOM PILIHAN
-                    # =====================================
-
-                    for col_name in selected_columns:
-
-                        if (
-                            col_name
-                            in file_mapping
-                        ):
-
-                            excel_col = (
-                                file_mapping[
-                                    col_name
-                                ]
-                            )
-
-                            row_result[
-                                col_name
-                            ] = raw.iloc[
-                                r,
-                                excel_col
-                            ]
-
-                    final_data.append(
-                        row_result
-                    )
-
-            # =====================================
-            # DATAFRAME FINAL
-            # =====================================
-
-            df_final = pd.DataFrame(
-                final_data
-            )
+            ]
 
             st.markdown(
-                "## 📈 SUMMARY RESULT"
+                "## 📊 HASIL TEMPLATE"
             )
-
-            c1, c2, c3 = st.columns(3)
-
-            with c1:
-                st.metric(
-                    "Entity",
-                    df_final[
-                        "ENTITY"
-                    ].nunique()
-                )
-
-            with c2:
-                st.metric(
-                    "Customer",
-                    len(df_final)
-                )
-
-            with c3:
-                st.metric(
-                    "Column",
-                    len(df_final.columns)
-                )
 
             st.dataframe(
-                df_final,
+                result,
                 use_container_width=True
             )
-
-            # =====================================
-            # DOWNLOAD
-            # =====================================
 
             output = io.BytesIO()
 
@@ -341,20 +240,14 @@ elif menu == "MERGE DATA":
                 engine="openpyxl"
             ) as writer:
 
-                df_final.to_excel(
+                result.to_excel(
                     writer,
                     index=False
                 )
 
             st.download_button(
-                label="⬇️ Download Summary",
-                data=output.getvalue(),
-                file_name="SUMMARY_ALL_PNL.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                "⬇️ Download Template",
+                output.getvalue(),
+                "summary_template.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-    else:
-
-        st.info(
-            "Silakan upload file terlebih dahulu."
-        )

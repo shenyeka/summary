@@ -103,205 +103,186 @@ elif menu == "MERGE DATA":
 
     if uploaded_files:
 
-        try:
+        # =====================================
+        # SCAN KOLOM SEMUA FILE
+        # =====================================
 
-            all_data = []
+        all_columns = set()
+        file_data = {}
 
-            for file in uploaded_files:
+        for file in uploaded_files:
+
+            df = pd.read_excel(file)
+
+            file_data[file.name] = df
+
+            all_columns.update(df.columns.tolist())
+
+        all_columns = sorted(
+            [str(col) for col in all_columns]
+        )
+
+        st.markdown("## ⚙️ PILIH KOLOM")
+
+        selected_columns = st.multiselect(
+            "Pilih kolom yang ingin diambil",
+            options=all_columns
+        )
+
+        st.markdown("## ➕ KOLOM TAMBAHAN")
+
+        add_entity = st.checkbox(
+            "Tambahkan ENTITY",
+            value=True
+        )
+
+        add_service = st.checkbox(
+            "Tambahkan SERVICE",
+            value=True
+        )
+
+        add_afiliasi = st.checkbox(
+            "PNL Afiliasi",
+            value=True
+        )
+
+        add_vertical = st.checkbox(
+            "Vertical 2",
+            value=True
+        )
+
+        add_existing = st.checkbox(
+            "Existing/ Whitesheet",
+            value=True
+        )
+
+        # =====================================
+        # GENERATE
+        # =====================================
+
+        if st.button("🚀 GENERATE SUMMARY"):
+
+            final_df = pd.DataFrame()
+
+            for filename, df in file_data.items():
+
+                temp = pd.DataFrame()
+
+                # ==========================
+                # ENTITY
+                # ==========================
 
                 entity = (
-                    file.name
+                    filename
                     .split(" ")[0]
                     .upper()
                 )
 
-                raw = pd.read_excel(
-                    file,
-                    header=None
-                )
+                if add_entity:
 
-                header_row = 6
-                data_start = 7
+                    temp["ENTITY"] = entity
 
-                headers = raw.iloc[header_row]
+                # ==========================
+                # KOLOM PILIHAN USER
+                # ==========================
 
-                # =====================
-                # Cari kolom utama
-                # =====================
+                for col in selected_columns:
 
-                service_col = None
-                customer_col = None
+                    if col in df.columns:
 
-                for col in range(len(headers)):
+                        temp[col] = df[col]
 
-                    value = str(
-                        headers[col]
-                    ).upper()
+                # ==========================
+                # SERVICE
+                # ==========================
 
-                    if "SERVICE" in value:
+                if add_service:
 
-                        service_col = col
+                    service_col = None
 
-                    if "CUSTOMER" in value:
-
-                        customer_col = col
-
-                if customer_col is None:
-                    continue
-
-                # =====================
-                # Build Data
-                # =====================
-
-                for idx in range(
-                    data_start,
-                    len(raw)
-                ):
-
-                    row = raw.iloc[idx]
-
-                    customer = row[
-                        customer_col
-                    ]
-
-                    if pd.isna(customer):
-                        continue
-
-                    result = {
-
-                        "ENTITY": entity,
-
-                        "SERVICE":
-                        row[service_col]
-                        if service_col is not None
-                        else "",
-
-                        "CUSTOMER":
-                        customer,
-
-                        "PNL Afiliasi": "",
-
-                        "Vertical 2": "",
-
-                        "Existing/ Whitesheet": ""
-
-                    }
-
-                    # =====================
-                    # Ambil semua metric
-                    # =====================
-
-                    for col in range(
-                        len(raw.columns)
-                    ):
-
-                        metric = str(
-                            headers[col]
-                        ).upper()
-
-                        value = row[col]
+                    for col in df.columns:
 
                         if (
-                            metric
-                            not in
-                            [
-                                "REVENUE",
-                                "EBIT",
-                                "EBIT %"
-                            ]
-                        ):
-                            continue
-
-                        month = raw.iloc[5, col]
-
-                        if pd.isna(month):
-                            continue
-
-                        # =====================
-                        # Nama bulan
-                        # =====================
-
-                        if (
-                            str(month)
-                            .upper()
-                            .strip()
-                            == "YTD"
+                            "SERVICE"
+                            in str(col).upper()
                         ):
 
-                            month_name = "YTD"
+                            service_col = col
+                            break
 
-                        else:
+                    if service_col:
 
-                            try:
-
-                                month_name = pd.to_datetime(
-                                    month
-                                ).strftime(
-                                    "%b-%y"
-                                ).upper()
-
-                            except:
-
-                                month_name = (
-                                    str(month)
-                                    .upper()
-                                )
-
-                        col_name = (
-                            f"{metric}_{month_name}"
+                        temp["SERVICE"] = (
+                            df[service_col]
                         )
 
-                        result[
-                            col_name
-                        ] = value
+                    else:
 
-                    all_data.append(
-                        result
-                    )
+                        temp["SERVICE"] = ""
 
-            # =====================
-            # MERGE
-            # =====================
+                # ==========================
+                # KOLOM KOSONG
+                # ==========================
 
-            df_final = pd.DataFrame(
-                all_data
-            )
+                if add_afiliasi:
 
-            st.markdown(
-                "## 📊 SUMMARY"
-            )
+                    temp["PNL Afiliasi"] = ""
+
+                if add_vertical:
+
+                    temp["Vertical 2"] = ""
+
+                if add_existing:
+
+                    temp[
+                        "Existing/ Whitesheet"
+                    ] = ""
+
+                final_df = pd.concat(
+                    [
+                        final_df,
+                        temp
+                    ],
+                    ignore_index=True
+                )
+
+            # =====================================
+            # SUMMARY
+            # =====================================
+
+            st.markdown("## 📊 SUMMARY")
 
             c1, c2, c3 = st.columns(3)
 
             c1.metric(
-                "Total Entity",
-                df_final[
-                    "ENTITY"
-                ].nunique()
+                "Total File",
+                len(uploaded_files)
             )
 
             c2.metric(
-                "Total Customer",
-                len(df_final)
+                "Total Row",
+                len(final_df)
             )
 
             c3.metric(
                 "Total Column",
-                len(df_final.columns)
+                len(final_df.columns)
             )
 
-            st.markdown(
-                "## 📋 PREVIEW"
-            )
+            # =====================================
+            # PREVIEW
+            # =====================================
+
+            st.markdown("## 📋 PREVIEW")
 
             st.dataframe(
-                df_final,
+                final_df,
                 use_container_width=True
             )
 
-            # =====================
+            # =====================================
             # DOWNLOAD
-            # =====================
+            # =====================================
 
             output = io.BytesIO()
 
@@ -310,7 +291,7 @@ elif menu == "MERGE DATA":
                 engine="openpyxl"
             ) as writer:
 
-                df_final.to_excel(
+                final_df.to_excel(
                     writer,
                     index=False
                 )
@@ -322,14 +303,8 @@ elif menu == "MERGE DATA":
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-        except Exception as e:
-
-            st.error(
-                f"Error : {e}"
-            )
-
     else:
 
         st.info(
-            "Upload file PUJA, PSR, PFU, PIR, dan MLD terlebih dahulu."
+            "Silakan upload file terlebih dahulu."
         )

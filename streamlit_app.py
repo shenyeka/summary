@@ -91,147 +91,209 @@ elif menu == "MERGE DATA":
 
     st.markdown("""
     <div class='header-container'>
-        MERGE DATA
+        MERGE DATA SUMMARY
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader(
-        "Upload File Excel",
-        type=["xlsx"]
+    uploaded_files = st.file_uploader(
+        "Upload File PNL",
+        type=["xlsx"],
+        accept_multiple_files=True
     )
 
-    if uploaded_file:
+    if uploaded_files:
 
-        # ======================================
-        # BACA FILE
-        # ======================================
+        # =====================================
+        # SCAN HEADER FILE PERTAMA
+        # =====================================
 
-        df = pd.read_excel(
-            uploaded_file,
+        raw_first = pd.read_excel(
+            uploaded_files[0],
             header=None
         )
 
-        st.markdown("## 📋 PREVIEW DATA")
+        month_row = raw_first.iloc[5]
+        metric_row = raw_first.iloc[6]
 
-        st.dataframe(
-            df,
-            use_container_width=True,
-            height=400
+        available_columns = {}
+
+        for col in range(len(raw_first.columns)):
+
+            month = str(month_row[col]).strip()
+            metric = str(metric_row[col]).strip()
+
+            if metric.upper() in [
+                "REVENUE",
+                "EBIT",
+                "EBIT %"
+            ]:
+
+                header_name = f"{metric} {month}"
+
+                available_columns[
+                    header_name
+                ] = col
+
+        st.markdown("## 📊 PILIH KOLOM")
+
+        selected_columns = st.multiselect(
+            "Kolom yang akan diambil",
+            list(available_columns.keys())
         )
 
-        # ======================================
-        # PILIH KOLOM
-        # ======================================
+        if st.button("🚀 GENERATE SUMMARY"):
 
-        st.markdown("## ⚙️ Mapping Kolom")
+            final_result = []
 
-        col_options = list(df.columns)
+            # =====================================
+            # LOOP SEMUA FILE
+            # =====================================
 
-        service_col = st.selectbox(
-            "SERVICE",
-            col_options
-        )
+            for file in uploaded_files:
 
-        customer_col = st.selectbox(
-            "CUSTOMER",
-            col_options,
-            index=min(4, len(col_options)-1)
-        )
-
-        rev_jan_col = st.selectbox(
-            "Revenue Jan",
-            col_options
-        )
-
-        ebit_jan_col = st.selectbox(
-            "EBIT Jan",
-            col_options
-        )
-
-        rev_feb_col = st.selectbox(
-            "Revenue Feb",
-            col_options
-        )
-
-        ebit_feb_col = st.selectbox(
-            "EBIT Feb",
-            col_options
-        )
-
-        # ======================================
-        # BARIS DATA
-        # ======================================
-
-        start_row = st.number_input(
-            "Data mulai dari baris",
-            min_value=1,
-            value=8
-        )
-
-        # ======================================
-        # GENERATE
-        # ======================================
-
-        if st.button("🚀 GENERATE TEMPLATE"):
-
-            temp = df.iloc[start_row-1:].copy()
-
-            result = pd.DataFrame()
-
-            result["ENTITY"] = ""
-
-            result["SERVICE"] = temp[
-                service_col
-            ]
-
-            result["CUSTOMER"] = temp[
-                customer_col
-            ]
-
-            result["PNL Afiliasi"] = ""
-
-            result["Vertical 2"] = ""
-
-            result["Existing/Whitesheet"] = ""
-
-            result["Revenue Jan"] = temp[
-                rev_jan_col
-            ]
-
-            result["EBIT Jan"] = temp[
-                ebit_jan_col
-            ]
-
-            result["Revenue Feb"] = temp[
-                rev_feb_col
-            ]
-
-            result["EBIT Feb"] = temp[
-                ebit_feb_col
-            ]
-
-            # ==================================
-            # HAPUS TOTAL
-            # ==================================
-
-            result = result[
-                ~result["CUSTOMER"]
-                .astype(str)
-                .str.upper()
-                .str.contains(
-                    "TOTAL",
-                    na=False
+                entity = (
+                    file.name
+                    .split(" ")[0]
+                    .upper()
                 )
-            ]
+
+                raw = pd.read_excel(
+                    file,
+                    header=None
+                )
+
+                # SERVICE merged cell
+                raw[3] = raw[3].ffill()
+
+                month_row = raw.iloc[5]
+                metric_row = raw.iloc[6]
+
+                file_mapping = {}
+
+                for col in range(
+                    len(raw.columns)
+                ):
+
+                    month = str(
+                        month_row[col]
+                    ).strip()
+
+                    metric = str(
+                        metric_row[col]
+                    ).strip()
+
+                    if metric.upper() in [
+                        "REVENUE",
+                        "EBIT",
+                        "EBIT %"
+                    ]:
+
+                        file_mapping[
+                            f"{metric} {month}"
+                        ] = col
+
+                # =====================================
+                # LOOP CUSTOMER
+                # =====================================
+
+                for r in range(
+                    7,
+                    len(raw)
+                ):
+
+                    service = str(
+                        raw.iloc[r,3]
+                    ).strip()
+
+                    customer = str(
+                        raw.iloc[r,4]
+                    ).strip()
+
+                    row_text = (
+                        service + " " + customer
+                    ).upper()
+
+                    # skip kosong
+                    if (
+                        customer == ""
+                        or customer.upper() == "NAN"
+                    ):
+                        continue
+
+                    # skip total
+                    if "TOTAL" in row_text:
+                        continue
+
+                    temp = {
+
+                        "ENTITY":
+                        entity,
+
+                        "SERVICE":
+                        service,
+
+                        "CUSTOMER":
+                        customer,
+
+                        "PNL Afiliasi":
+                        "",
+
+                        "Vertical 2":
+                        "",
+
+                        "Existing/Whitesheet":
+                        ""
+
+                    }
+
+                    # ==========================
+                    # KOLOM YANG DIPILIH USER
+                    # ==========================
+
+                    for col_name in selected_columns:
+
+                        if (
+                            col_name
+                            in file_mapping
+                        ):
+
+                            excel_col = (
+                                file_mapping[
+                                    col_name
+                                ]
+                            )
+
+                            temp[
+                                col_name
+                            ] = raw.iloc[
+                                r,
+                                excel_col
+                            ]
+
+                    final_result.append(
+                        temp
+                    )
+
+            # =====================================
+            # DATAFRAME AKHIR
+            # =====================================
+
+            df_final = pd.DataFrame(
+                final_result
+            )
 
             st.markdown(
-                "## 📊 HASIL TEMPLATE"
+                "## 📋 SUMMARY RESULT"
             )
 
             st.dataframe(
-                result,
+                df_final,
                 use_container_width=True
             )
+
+            # =====================================
+            # DOWNLOAD
+            # =====================================
 
             output = io.BytesIO()
 
@@ -240,14 +302,20 @@ elif menu == "MERGE DATA":
                 engine="openpyxl"
             ) as writer:
 
-                result.to_excel(
+                df_final.to_excel(
                     writer,
                     index=False
                 )
 
             st.download_button(
-                "⬇️ Download Template",
+                "⬇️ Download Summary",
                 output.getvalue(),
-                "summary_template.xlsx",
+                "SUMMARY_ALL_PNL.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+    else:
+
+        st.info(
+            "Upload file terlebih dahulu."
+        )

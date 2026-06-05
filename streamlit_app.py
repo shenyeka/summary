@@ -103,9 +103,9 @@ elif menu == "MERGE DATA":
 
     if uploaded_files:
 
-        # ==========================================
-        # SCAN HEADER DARI FILE PERTAMA
-        # ==========================================
+        # =====================================
+        # SCAN HEADER FILE PERTAMA
+        # =====================================
 
         raw_first = pd.read_excel(
             uploaded_files[0],
@@ -119,33 +119,33 @@ elif menu == "MERGE DATA":
 
         for col in range(len(raw_first.columns)):
 
-            month = str(month_row[col]).strip()
-            metric = str(metric_row[col]).strip()
+            metric = str(
+                metric_row[col]
+            ).strip()
 
-            if (
-                metric.upper()
-                in [
-                    "REVENUE",
-                    "EBIT",
-                    "EBIT %"
-                ]
-            ):
+            month = str(
+                month_row[col]
+            ).strip()
 
-                display_name = (
-                    f"{metric} {month}"
-                )
+            if metric.upper() in [
+                "REVENUE",
+                "EBIT",
+                "EBIT %"
+            ]:
 
-                available_columns[
-                    display_name
-                ] = col
+                col_name = f"{metric} {month}"
+
+                available_columns[col_name] = col
 
         st.markdown(
-            "## 📊 Pilih Kolom Yang Akan Diambil"
+            "## 📊 Pilih Kolom"
         )
 
         selected_columns = st.multiselect(
-            "",
-            list(available_columns.keys())
+            "Kolom yang akan diambil",
+            list(
+                available_columns.keys()
+            )
         )
 
         if st.button(
@@ -153,6 +153,10 @@ elif menu == "MERGE DATA":
         ):
 
             final_data = []
+
+            # =====================================
+            # LOOP SEMUA FILE
+            # =====================================
 
             for file in uploaded_files:
 
@@ -167,39 +171,43 @@ elif menu == "MERGE DATA":
                     header=None
                 )
 
+                # service merged cell
+                raw[0] = raw[0].ffill()
+
                 month_row = raw.iloc[5]
                 metric_row = raw.iloc[6]
 
                 file_mapping = {}
 
+                # =====================================
+                # MAPPING KOLOM
+                # =====================================
+
                 for col in range(
                     len(raw.columns)
                 ):
-
-                    month = str(
-                        month_row[col]
-                    ).strip()
 
                     metric = str(
                         metric_row[col]
                     ).strip()
 
-                    if (
-                        metric.upper()
-                        in [
-                            "REVENUE",
-                            "EBIT",
-                            "EBIT %"
-                        ]
-                    ):
+                    month = str(
+                        month_row[col]
+                    ).strip()
+
+                    if metric.upper() in [
+                        "REVENUE",
+                        "EBIT",
+                        "EBIT %"
+                    ]:
 
                         file_mapping[
                             f"{metric} {month}"
                         ] = col
 
-                # ==================================
-                # LOOP DATA CUSTOMER
-                # ==================================
+                # =====================================
+                # LOOP CUSTOMER
+                # =====================================
 
                 for r in range(
                     7,
@@ -214,17 +222,22 @@ elif menu == "MERGE DATA":
                         raw.iloc[r,4]
                     ).strip()
 
-                    # Skip kosong
+                    row_text = (
+                        service + " " + customer
+                    ).upper()
+
+                    # skip kosong
                     if (
                         customer == ""
-                        or customer.upper() == "NAN"
+                        or customer.upper()
+                        == "NAN"
                     ):
                         continue
 
-                    # Skip TOTAL
+                    # skip total
                     if (
                         "TOTAL"
-                        in customer.upper()
+                        in row_text
                     ):
                         continue
 
@@ -250,9 +263,9 @@ elif menu == "MERGE DATA":
 
                     }
 
-                    # ==========================
+                    # =====================================
                     # AMBIL KOLOM PILIHAN
-                    # ==========================
+                    # =====================================
 
                     for col_name in selected_columns:
 
@@ -278,13 +291,13 @@ elif menu == "MERGE DATA":
                         row_result
                     )
 
+            # =====================================
+            # DATAFRAME FINAL
+            # =====================================
+
             df_final = pd.DataFrame(
                 final_data
             )
-
-            # ==================================
-            # SUMMARY
-            # ==================================
 
             st.markdown(
                 "## 📈 SUMMARY RESULT"
@@ -295,7 +308,9 @@ elif menu == "MERGE DATA":
             with c1:
                 st.metric(
                     "Entity",
-                    df_final["ENTITY"].nunique()
+                    df_final[
+                        "ENTITY"
+                    ].nunique()
                 )
 
             with c2:
@@ -310,18 +325,14 @@ elif menu == "MERGE DATA":
                     len(df_final.columns)
                 )
 
-            st.markdown(
-                "## 📋 PREVIEW"
-            )
-
             st.dataframe(
                 df_final,
                 use_container_width=True
             )
 
-            # ==================================
+            # =====================================
             # DOWNLOAD
-            # ==================================
+            # =====================================
 
             output = io.BytesIO()
 
@@ -336,8 +347,8 @@ elif menu == "MERGE DATA":
                 )
 
             st.download_button(
-                "⬇️ Download Summary",
-                output.getvalue(),
+                label="⬇️ Download Summary",
+                data=output.getvalue(),
                 file_name="SUMMARY_ALL_PNL.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
@@ -345,5 +356,5 @@ elif menu == "MERGE DATA":
     else:
 
         st.info(
-            "Upload file PUJA, PSR, PFU, PIR, dan MLD terlebih dahulu."
+            "Silakan upload file terlebih dahulu."
         )

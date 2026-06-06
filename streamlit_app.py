@@ -89,233 +89,75 @@ if menu == "HOME":
 # ================= MERGE DATA =================
 elif menu == "MERGE DATA":
 
-    st.markdown("""
-    <div class='header-container'>
-        MERGE DATA SUMMARY
-    </div>
-    """, unsafe_allow_html=True)
+    st.header("MERGE DATA")
 
-    uploaded_files = st.file_uploader(
-        "Upload File PNL",
-        type=["xlsx"],
-        accept_multiple_files=True
+    uploaded_file = st.file_uploader(
+        "Upload File Excel",
+        type=["xlsx", "xls"]
     )
 
-    if uploaded_files:
+    if uploaded_file is not None:
 
-        # =====================================
-        # SCAN HEADER FILE PERTAMA
-        # =====================================
+        df = pd.read_excel(uploaded_file, header=None)
 
-        raw_first = pd.read_excel(
-            uploaded_files[0],
-            header=None
-        )
+        st.subheader("Preview Data Awal")
+        st.dataframe(df.head(20))
 
-        month_row = raw_first.iloc[5]
-        metric_row = raw_first.iloc[6]
+        if st.button("Proses Merge Data"):
 
-        available_columns = {}
+            # Cari baris header customer
+            header_row = None
 
-        for col in range(len(raw_first.columns)):
+            for i in range(len(df)):
+                row_text = " ".join(df.iloc[i].astype(str))
 
-            month = str(month_row[col]).strip()
-            metric = str(metric_row[col]).strip()
+                if "CUSTOMER" in row_text.upper():
+                    header_row = i
+                    break
 
-            if metric.upper() in [
-                "REVENUE",
-                "EBIT",
-                "EBIT %"
-            ]:
+            if header_row is None:
+                st.error("Header CUSTOMER tidak ditemukan")
+                st.stop()
 
-                header_name = f"{metric} {month}"
+            # Ambil header
+            header = df.iloc[header_row]
 
-                available_columns[
-                    header_name
-                ] = col
+            # Data setelah header
+            data = df.iloc[header_row + 1:].copy()
 
-        st.markdown("## 📊 PILIH KOLOM")
+            # Set header
+            data.columns = header
 
-        selected_columns = st.multiselect(
-            "Kolom yang akan diambil",
-            list(available_columns.keys())
-        )
+            # Hapus kolom kosong
+            data = data.dropna(axis=1, how="all")
 
-        if st.button("🚀 GENERATE SUMMARY"):
+            # Hapus baris kosong
+            data = data.dropna(how="all")
 
-            final_result = []
+            # Forward fill untuk merged cell
+            data = data.ffill()
 
-            # =====================================
-            # LOOP SEMUA FILE
-            # =====================================
+            st.success("Merge Data Berhasil")
 
-            for file in uploaded_files:
+            st.subheader("Hasil")
+            st.dataframe(data)
 
-                entity = (
-                    file.name
-                    .split(" ")[0]
-                    .upper()
-                )
-
-                raw = pd.read_excel(
-                    file,
-                    header=None
-                )
-
-                # SERVICE merged cell
-                raw[3] = raw[3].ffill()
-
-                month_row = raw.iloc[5]
-                metric_row = raw.iloc[6]
-
-                file_mapping = {}
-
-                for col in range(
-                    len(raw.columns)
-                ):
-
-                    month = str(
-                        month_row[col]
-                    ).strip()
-
-                    metric = str(
-                        metric_row[col]
-                    ).strip()
-
-                    if metric.upper() in [
-                        "REVENUE",
-                        "EBIT",
-                        "EBIT %"
-                    ]:
-
-                        file_mapping[
-                            f"{metric} {month}"
-                        ] = col
-
-                # =====================================
-                # LOOP CUSTOMER
-                # =====================================
-
-                for r in range(
-                    7,
-                    len(raw)
-                ):
-
-                    service = str(
-                        raw.iloc[r,3]
-                    ).strip()
-
-                    customer = str(
-                        raw.iloc[r,4]
-                    ).strip()
-
-                    row_text = (
-                        service + " " + customer
-                    ).upper()
-
-                    # skip kosong
-                    if (
-                        customer == ""
-                        or customer.upper() == "NAN"
-                    ):
-                        continue
-
-                    # skip total
-                    if "TOTAL" in row_text:
-                        continue
-
-                    temp = {
-
-                        "ENTITY":
-                        entity,
-
-                        "SERVICE":
-                        service,
-
-                        "CUSTOMER":
-                        customer,
-
-                        "PNL Afiliasi":
-                        "",
-
-                        "Vertical 2":
-                        "",
-
-                        "Existing/Whitesheet":
-                        ""
-
-                    }
-
-                    # ==========================
-                    # KOLOM YANG DIPILIH USER
-                    # ==========================
-
-                    for col_name in selected_columns:
-
-                        if (
-                            col_name
-                            in file_mapping
-                        ):
-
-                            excel_col = (
-                                file_mapping[
-                                    col_name
-                                ]
-                            )
-
-                            temp[
-                                col_name
-                            ] = raw.iloc[
-                                r,
-                                excel_col
-                            ]
-
-                    final_result.append(
-                        temp
-                    )
-
-            # =====================================
-            # DATAFRAME AKHIR
-            # =====================================
-
-            df_final = pd.DataFrame(
-                final_result
-            )
-
-            st.markdown(
-                "## 📋 SUMMARY RESULT"
-            )
-
-            st.dataframe(
-                df_final,
-                use_container_width=True
-            )
-
-            # =====================================
-            # DOWNLOAD
-            # =====================================
-
-            output = io.BytesIO()
+            output = BytesIO()
 
             with pd.ExcelWriter(
                 output,
                 engine="openpyxl"
             ) as writer:
 
-                df_final.to_excel(
+                data.to_excel(
                     writer,
+                    sheet_name="Merged_Data",
                     index=False
                 )
 
             st.download_button(
-                "⬇️ Download Summary",
+                "Download Hasil",
                 output.getvalue(),
-                "SUMMARY_ALL_PNL.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name="merged_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-    else:
-
-        st.info(
-            "Upload file terlebih dahulu."
-        )

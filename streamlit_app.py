@@ -73,58 +73,59 @@ with st.sidebar:
 menu = st.session_state.menu
 
 # ================= HOME =================
-if menu == "HOME":
-
-    st.markdown("""
-    <div class='header-container'>
-        DATA MERGE DASHBOARD
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div class='menu-card'>
-        <h2 style='color:#ffd369'>MERGE DATA</h2>
-        <p>Upload beberapa file Excel dan gabungkan menjadi satu file.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ================= MERGE DATA =================
 elif menu == "MERGE DATA":
 
     import pandas as pd
+    import streamlit as st
     from io import BytesIO
+    from st_aggrid import AgGrid, GridOptionsBuilder
 
-    st.header("📂 Merge Data ke Template")
+    st.header("MERGE DATA")
 
     uploaded_file = st.file_uploader(
-        "Upload File Excel",
+        "Upload Excel",
         type=["xlsx", "xls"]
     )
 
     if uploaded_file is not None:
 
-        # =========================
+        # ==========================
         # BACA FILE
-        # =========================
+        # ==========================
         df = pd.read_excel(uploaded_file)
 
         st.subheader("Preview Data")
 
-        st.dataframe(
-            df,
-            use_container_width=True,
-            height=500
+        gb = GridOptionsBuilder.from_dataframe(df)
+
+        gb.configure_selection(
+            selection_mode="single",
+            use_checkbox=False
         )
+
+        grid_response = AgGrid(
+            df,
+            gridOptions=gb.build(),
+            height=500,
+            fit_columns_on_grid_load=False
+        )
+
+        # ==========================
+        # INISIALISASI SESSION
+        # ==========================
+        if "mapping" not in st.session_state:
+            st.session_state.mapping = {}
 
         st.divider()
 
-        # =========================
-        # TEMPLATE STANDAR
-        # =========================
-        template_columns = [
+        st.subheader("Pilih Kolom Dari File")
 
-            "Ignore",
+        source_col = st.selectbox(
+            "Kolom File",
+            df.columns
+        )
 
+        template_cols = [
             "Entity",
             "Service",
             "Customer",
@@ -184,44 +185,51 @@ elif menu == "MERGE DATA":
             "EBIT % YTD"
         ]
 
-        st.subheader("🛠 Mapping Kolom")
+        target_col = st.selectbox(
+            "Masukkan Ke Kolom Template",
+            template_cols
+        )
 
-        mapping = {}
+        if st.button("➕ ADD TO TEMPLATE"):
 
-        for col in df.columns:
+            st.session_state.mapping[target_col] = source_col
 
-            mapping[col] = st.selectbox(
-                f"{col}",
-                template_columns,
-                key=f"map_{col}"
+            st.success(
+                f"{source_col} ➜ {target_col}"
             )
 
         st.divider()
 
-        # =========================
+        st.subheader("Mapping Saat Ini")
+
+        if st.session_state.mapping:
+
+            mapping_df = pd.DataFrame(
+                [
+                    [k, v]
+                    for k, v in st.session_state.mapping.items()
+                ],
+                columns=[
+                    "Template Column",
+                    "Source Column"
+                ]
+            )
+
+            st.dataframe(
+                mapping_df,
+                use_container_width=True
+            )
+
+        # ==========================
         # GENERATE TEMPLATE
-        # =========================
-        if st.button("🚀 Generate Template"):
+        # ==========================
+        if st.button("🚀 GENERATE TEMPLATE"):
 
             result = pd.DataFrame()
 
-            used_targets = []
+            for target, source in st.session_state.mapping.items():
 
-            for source_col, target_col in mapping.items():
-
-                if target_col != "Ignore":
-
-                    if target_col in used_targets:
-
-                        st.error(
-                            f"Kolom '{target_col}' dipilih lebih dari sekali."
-                        )
-                        st.stop()
-
-                    result[target_col] = df[source_col]
-                    used_targets.append(target_col)
-
-            st.success("Template berhasil dibuat")
+                result[target] = df[source]
 
             st.subheader("Hasil Template")
 
@@ -230,9 +238,6 @@ elif menu == "MERGE DATA":
                 use_container_width=True
             )
 
-            # =========================
-            # DOWNLOAD
-            # =========================
             output = BytesIO()
 
             with pd.ExcelWriter(
@@ -247,8 +252,17 @@ elif menu == "MERGE DATA":
                 )
 
             st.download_button(
-                label="📥 Download Template",
-                data=output.getvalue(),
+                "📥 Download Template",
+                output.getvalue(),
                 file_name="Template_Hasil.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+        # ==========================
+        # RESET MAPPING
+        # ==========================
+        if st.button("🗑 Reset Mapping"):
+
+            st.session_state.mapping = {}
+
+            st.rerun()

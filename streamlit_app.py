@@ -89,7 +89,10 @@ if menu == "HOME":
 # ================= MERGE DATA =================
 elif menu == "MERGE DATA":
 
-    st.header("MERGE DATA")
+    import pandas as pd
+    from io import BytesIO
+
+    st.header("📂 Merge Data ke Template")
 
     uploaded_file = st.file_uploader(
         "Upload File Excel",
@@ -98,50 +101,136 @@ elif menu == "MERGE DATA":
 
     if uploaded_file is not None:
 
-        df = pd.read_excel(uploaded_file, header=None)
+        # =========================
+        # BACA FILE
+        # =========================
+        df = pd.read_excel(uploaded_file)
 
-        st.subheader("Preview Data Awal")
-        st.dataframe(df.head(20))
+        st.subheader("Preview Data")
 
-        if st.button("Proses Merge Data"):
+        st.dataframe(
+            df,
+            use_container_width=True,
+            height=500
+        )
 
-            # Cari baris header customer
-            header_row = None
+        st.divider()
 
-            for i in range(len(df)):
-                row_text = " ".join(df.iloc[i].astype(str))
+        # =========================
+        # TEMPLATE STANDAR
+        # =========================
+        template_columns = [
 
-                if "CUSTOMER" in row_text.upper():
-                    header_row = i
-                    break
+            "Ignore",
 
-            if header_row is None:
-                st.error("Header CUSTOMER tidak ditemukan")
-                st.stop()
+            "Entity",
+            "Service",
+            "Customer",
+            "Afiliasi",
+            "Vertical",
 
-            # Ambil header
-            header = df.iloc[header_row]
+            "Revenue Jan",
+            "EBIT Jan",
+            "EBIT % Jan",
 
-            # Data setelah header
-            data = df.iloc[header_row + 1:].copy()
+            "Revenue Feb",
+            "EBIT Feb",
+            "EBIT % Feb",
 
-            # Set header
-            data.columns = header
+            "Revenue Mar",
+            "EBIT Mar",
+            "EBIT % Mar",
 
-            # Hapus kolom kosong
-            data = data.dropna(axis=1, how="all")
+            "Revenue Apr",
+            "EBIT Apr",
+            "EBIT % Apr",
 
-            # Hapus baris kosong
-            data = data.dropna(how="all")
+            "Revenue May",
+            "EBIT May",
+            "EBIT % May",
 
-            # Forward fill untuk merged cell
-            data = data.ffill()
+            "Revenue Jun",
+            "EBIT Jun",
+            "EBIT % Jun",
 
-            st.success("Merge Data Berhasil")
+            "Revenue Jul",
+            "EBIT Jul",
+            "EBIT % Jul",
 
-            st.subheader("Hasil")
-            st.dataframe(data)
+            "Revenue Aug",
+            "EBIT Aug",
+            "EBIT % Aug",
 
+            "Revenue Sep",
+            "EBIT Sep",
+            "EBIT % Sep",
+
+            "Revenue Oct",
+            "EBIT Oct",
+            "EBIT % Oct",
+
+            "Revenue Nov",
+            "EBIT Nov",
+            "EBIT % Nov",
+
+            "Revenue Dec",
+            "EBIT Dec",
+            "EBIT % Dec",
+
+            "Revenue YTD",
+            "EBIT YTD",
+            "EBIT % YTD"
+        ]
+
+        st.subheader("🛠 Mapping Kolom")
+
+        mapping = {}
+
+        for col in df.columns:
+
+            mapping[col] = st.selectbox(
+                f"{col}",
+                template_columns,
+                key=f"map_{col}"
+            )
+
+        st.divider()
+
+        # =========================
+        # GENERATE TEMPLATE
+        # =========================
+        if st.button("🚀 Generate Template"):
+
+            result = pd.DataFrame()
+
+            used_targets = []
+
+            for source_col, target_col in mapping.items():
+
+                if target_col != "Ignore":
+
+                    if target_col in used_targets:
+
+                        st.error(
+                            f"Kolom '{target_col}' dipilih lebih dari sekali."
+                        )
+                        st.stop()
+
+                    result[target_col] = df[source_col]
+                    used_targets.append(target_col)
+
+            st.success("Template berhasil dibuat")
+
+            st.subheader("Hasil Template")
+
+            st.dataframe(
+                result,
+                use_container_width=True
+            )
+
+            # =========================
+            # DOWNLOAD
+            # =========================
             output = BytesIO()
 
             with pd.ExcelWriter(
@@ -149,15 +238,15 @@ elif menu == "MERGE DATA":
                 engine="openpyxl"
             ) as writer:
 
-                data.to_excel(
+                result.to_excel(
                     writer,
-                    sheet_name="Merged_Data",
-                    index=False
+                    index=False,
+                    sheet_name="Template"
                 )
 
             st.download_button(
-                "Download Hasil",
-                output.getvalue(),
-                file_name="merged_data.xlsx",
+                label="📥 Download Template",
+                data=output.getvalue(),
+                file_name="Template_Hasil.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )

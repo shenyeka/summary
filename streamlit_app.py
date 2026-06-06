@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import io
+from io import BytesIO
 
 # ================= CONFIG =================
 st.set_page_config(
@@ -13,6 +13,9 @@ st.set_page_config(
 if "menu" not in st.session_state:
     st.session_state.menu = "HOME"
 
+if "mapping" not in st.session_state:
+    st.session_state.mapping = {}
+
 # ================= CSS =================
 st.markdown("""
 <style>
@@ -20,7 +23,6 @@ st.markdown("""
 html, body, [class*="css"]{
     background: linear-gradient(135deg,#0a1931,#16213e);
     color:white;
-    font-family:'Poppins',sans-serif;
 }
 
 .header-container{
@@ -32,14 +34,6 @@ html, body, [class*="css"]{
     font-size:28px;
     font-weight:bold;
     margin-bottom:30px;
-}
-
-.menu-card{
-    background:#112240;
-    border-radius:15px;
-    padding:2rem;
-    text-align:center;
-    border:1px solid rgba(255,211,105,0.2);
 }
 
 .stButton > button{
@@ -70,18 +64,28 @@ with st.sidebar:
 
 menu = st.session_state.menu
 
-# ================= HOME =================
+# ======================================================
+# HOME
+# ======================================================
+if menu == "HOME":
+
+    st.markdown("""
+    <div class="header-container">
+        📊 DATA MERGE DASHBOARD
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.info("Upload file Excel pada menu MERGE DATA")
+
+# ======================================================
+# MERGE DATA
+# ======================================================
 elif menu == "MERGE DATA":
 
-    import pandas as pd
-    import streamlit as st
-    from io import BytesIO
-    from st_aggrid import AgGrid, GridOptionsBuilder
-
-    st.header("MERGE DATA")
+    st.header("📂 MERGE DATA")
 
     uploaded_file = st.file_uploader(
-        "Upload Excel",
+        "Upload File Excel",
         type=["xlsx", "xls"]
     )
 
@@ -94,34 +98,24 @@ elif menu == "MERGE DATA":
 
         st.subheader("Preview Data")
 
-        gb = GridOptionsBuilder.from_dataframe(df)
-
-        gb.configure_selection(
-            selection_mode="single",
-            use_checkbox=False
-        )
-
-        grid_response = AgGrid(
+        st.dataframe(
             df,
-            gridOptions=gb.build(),
-            height=500,
-            fit_columns_on_grid_load=False
+            use_container_width=True,
+            height=500
         )
-
-        # ==========================
-        # INISIALISASI SESSION
-        # ==========================
-        if "mapping" not in st.session_state:
-            st.session_state.mapping = {}
 
         st.divider()
 
-        st.subheader("Pilih Kolom Dari File")
+        # ==========================
+        # PILIH KOLOM DARI FILE
+        # ==========================
+        col1, col2 = st.columns(2)
 
-        source_col = st.selectbox(
-            "Kolom File",
-            df.columns
-        )
+        with col1:
+            source_col = st.selectbox(
+                "Kolom Dari File",
+                df.columns
+            )
 
         template_cols = [
             "Entity",
@@ -183,11 +177,15 @@ elif menu == "MERGE DATA":
             "EBIT % YTD"
         ]
 
-        target_col = st.selectbox(
-            "Masukkan Ke Kolom Template",
-            template_cols
-        )
+        with col2:
+            target_col = st.selectbox(
+                "Masukkan Ke Template",
+                template_cols
+            )
 
+        # ==========================
+        # ADD MAPPING
+        # ==========================
         if st.button("➕ ADD TO TEMPLATE"):
 
             st.session_state.mapping[target_col] = source_col
@@ -198,15 +196,15 @@ elif menu == "MERGE DATA":
 
         st.divider()
 
-        st.subheader("Mapping Saat Ini")
+        # ==========================
+        # TAMPILKAN MAPPING
+        # ==========================
+        st.subheader("📋 Mapping Saat Ini")
 
-        if st.session_state.mapping:
+        if len(st.session_state.mapping) > 0:
 
             mapping_df = pd.DataFrame(
-                [
-                    [k, v]
-                    for k, v in st.session_state.mapping.items()
-                ],
+                list(st.session_state.mapping.items()),
                 columns=[
                     "Template Column",
                     "Source Column"
@@ -217,6 +215,11 @@ elif menu == "MERGE DATA":
                 mapping_df,
                 use_container_width=True
             )
+
+        else:
+            st.info("Belum ada mapping.")
+
+        st.divider()
 
         # ==========================
         # GENERATE TEMPLATE
@@ -245,8 +248,8 @@ elif menu == "MERGE DATA":
 
                 result.to_excel(
                     writer,
-                    index=False,
-                    sheet_name="Template"
+                    sheet_name="Template",
+                    index=False
                 )
 
             st.download_button(
@@ -257,9 +260,9 @@ elif menu == "MERGE DATA":
             )
 
         # ==========================
-        # RESET MAPPING
+        # RESET
         # ==========================
-        if st.button("🗑 Reset Mapping"):
+        if st.button("🗑 RESET MAPPING"):
 
             st.session_state.mapping = {}
 

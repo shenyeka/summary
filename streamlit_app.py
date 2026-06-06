@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import io
 
-pip install streamlit-aggrid
-
 # ================= CONFIG =================
 st.set_page_config(
     page_title="Data Merge Dashboard",
